@@ -1,9 +1,6 @@
 # Copyright (C) 2004-2007 Prairie Games, Inc
 # Please see LICENSE.TXT for details
 
-from mud_ext.gamesettings import override_ip_addresses
-override_ip_addresses()
-
 import imp, os, sys
 
 
@@ -28,5 +25,5 @@ if main_is_frozen():
 
 
 
-from mud_ext.worldmanager.worldmanager import main
+from mud.worldmanager.worldmanager import main
 main()

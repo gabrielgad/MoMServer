@@ -1,8 +1,6 @@
 # Copyright (C) 2004-2007 Prairie Games, Inc
 # Please see LICENSE.TXT for details
 
-from mud_ext.gamesettings import override_ip_addresses
-override_ip_addresses()
 
 import imp, os, sys
 
@@ -16,7 +14,7 @@ if main_is_frozen():
     maindir = os.getcwd()
     sys.path.append(maindir)    
 
-from mud_ext.worlddaemon.worldimp import main
+from mud.worlddaemon.worldimp import main
 main()
 
 
