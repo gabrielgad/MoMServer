@@ -8,11 +8,32 @@ Unfortunately the Minions of Mirth servers were shutdown permanently some years 
 Ideally you'd only run this with people you trust, over a VPN if you wanted to do so remotely.
 
 ## Requirements
+
+### Windows
 * Windows install of Minions of Mirth (Run the game and update it)
+* Python 2.7
+* wxPython 2.8.x
+* OpenSSL (32-bit)
 
-Note: I'm looking at a Linux install, but it's non-trivial (requires building Torque Game Engine from source)
+### Linux
+**Linux support is now available via Wine!** See [LINUX_SETUP.md](LINUX_SETUP.md) for comprehensive setup instructions.
 
-## Installation
+**Quick Start (Linux):**
+1. Install Wine: `sudo apt install wine64 wine32 winetricks`
+2. Run setup scripts:
+   ```bash
+   ./setup-wine-env.sh           # Create Wine environment
+   ./install-python-wine.sh      # Install Python 2.7
+   ./install-dependencies-wine.sh # Install wxPython and dependencies
+   ./run-mom-server.sh install   # Run Install.py
+   ./run-mom-server.sh all       # Start all servers
+   ```
+
+For detailed Linux setup instructions, troubleshooting, and the build-from-source approach, see **[LINUX_SETUP.md](LINUX_SETUP.md)**.
+
+---
+
+## Windows Installation
 1. Install MoM and update it
 2. Install Python 2.7
 3. Install wxPython 2.8.x
@@ -51,6 +72,8 @@ serverconfig/<WorldName>.py
 ```
 
 ## Running Server
+
+### Windows
 Make sure that you have the environment variables set first. Then run each of these in a separate window:
 ```
 C:\Python27\python.exe .\MasterServer.py gameconfig=mom.cfg
@@ -65,6 +88,27 @@ C:\Python27\python.exe .\CharacterServer.py gameconfig=mom.cfg
 C:\Python27\python.exe .\WorldManager.py gameconfig=mom.cfg
 ```
 The world manager allows you to create new worlds, to create an account start the client and click register
+
+### Linux
+Use the wrapper script to start servers:
+```bash
+# Start all servers at once (using tmux or screen)
+./run-mom-server.sh all
+
+# Or start each server individually in separate terminals
+./run-mom-server.sh master
+./run-mom-server.sh gm
+./run-mom-server.sh character
+./run-mom-server.sh world-manager
+
+# Stop all servers
+./run-mom-server.sh stop
+
+# Check server status
+./run-mom-server.sh status
+```
+
+For more Linux-specific commands, run: `./run-mom-server.sh help`
 
 ## Exposing the server to the internet
 I thought I already told you, this is probably unsafe....

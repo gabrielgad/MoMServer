@@ -12,3 +12,7 @@ log_*
 
 venv
 .idea
+
+# Wine/Linux setup
+.downloads/
+.wine-mom/
