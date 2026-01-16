@@ -1,0 +1,62 @@
+# syntax=docker/dockerfile:1.4
+# MoM Server TGE Builder Image
+# Pre-compiled Torque Game Engine with pytge.so
+#
+# Build: ./scripts/build-tge.sh --push v1.0
+# Rebuild: When TGE engine code changes (rare)
+
+ARG BASE_IMAGE=10.0.0.6:5000/momserver/base-deps:buster-i386
+FROM ${BASE_IMAGE} AS builder
+
+WORKDIR /build
+
+# Copy only TGE source (not the full repo)
+COPY tge-152-fork/engine /build/tge-152-fork/engine
+COPY tge-152-fork/lib /build/tge-152-fork/lib
+COPY tge-152-fork/mk /build/tge-152-fork/mk
+COPY tge-152-fork/Makefile /build/tge-152-fork/Makefile
+
+# Configure for Linux GCC4
+WORKDIR /build/tge-152-fork
+
+# Clean any cached 64-bit build artifacts from local source
+RUN rm -rf lib/out.GCC4.RELEASE engine/out.GCC4.RELEASE
+
+RUN echo 'include ../mk/conf.UNIX.mk' > mk/conf.GCC4.LINUX.mk && \
+    echo 'ASMFLAGS = -f elf -dLINUX' >> mk/conf.GCC4.LINUX.mk
+
+RUN make -f mk/configure.mk OS=LINUX COMPILER=GCC4 BUILD=RELEASE
+
+# Use system libpng (avoids compatibility issues)
+WORKDIR /build/tge-152-fork/lib
+RUN sed -i 's/\$(DIR.OBJ)\/lpng\$(EXT.LIB)//' Makefile && \
+    mkdir -p out.GCC4.RELEASE && ar rcs out.GCC4.RELEASE/lpng.a && \
+    rm -rf lpng/*.h && \
+    ln -s /usr/include/png.h lpng/png.h && \
+    ln -s /usr/include/pngconf.h lpng/pngconf.h && \
+    ln -s /usr/include/pnglibconf.h lpng/pnglibconf.h
+
+# Build TGE libraries
+RUN make -j$(nproc)
+
+# Build pytge.so Python extension
+WORKDIR /build/tge-152-fork/engine
+
+# Create output directory structure (required by Makefile)
+# Also create ../example to prevent post-build copy failure
+RUN mkdir -p out.GCC4.RELEASE ../example && \
+    find . -maxdepth 3 -type d ! -path "./out*" ! -path "./.git*" -print0 | \
+    xargs -0 -I {} mkdir -p "out.GCC4.RELEASE/{}" 2>/dev/null || true
+
+RUN make -j$(nproc) pytge
+
+# --- Final clean image ---
+FROM ${BASE_IMAGE}
+
+WORKDIR /server
+
+# Copy only the compiled pytge.so
+COPY --from=builder /build/tge-152-fork/engine/out.GCC4.RELEASE/pytge.so /server/pytge.so
+
+# Verify the file exists and has non-zero size
+RUN ls -la /server/pytge.so && test -s /server/pytge.so

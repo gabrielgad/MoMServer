@@ -1,0 +1,37 @@
+# MoM Reborn Server - Docker Compose (tmpfs optimized)
+# Uses pre-built images from Zot registry for fast startup
+#
+# Usage: podman-compose -f docker-compose.tmpfs.yml up -d
+
+version: '3.8'
+
+services:
+  momserver:
+    image: 10.0.0.6:5000/momserver/app:latest
+    container_name: mom-server
+    network_mode: host
+
+    # Memory limits - adjust based on your RAM
+    # Each zone uses ~200-400MB, plus WorldServer ~500MB
+    mem_limit: 4g
+    memswap_limit: 4g  # No swap to prevent disk thrashing
+
+    volumes:
+      # === PERSISTENT DATA ===
+      - ./data:/server/data
+      - ./minions.of.mirth:/server/minions.of.mirth
+
+      # === DEV OVERRIDES (mount source for hot-reload) ===
+      - ./mud:/server/mud:ro
+      - ./zoneserver.py:/server/zoneserver.py:ro
+
+    # === TMPFS MOUNTS (RAM-backed, no disk I/O) ===
+    tmpfs:
+      - /server/logs:size=512m,mode=1777
+      - /tmp:size=256m,mode=1777
+
+    restart: unless-stopped
+
+    environment:
+      # Reduce Python bytecode caching
+      - PYTHONDONTWRITEBYTECODE=1

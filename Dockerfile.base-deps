@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.4
+# MoM Server Base Dependencies Image
+# Contains all system packages and Python dependencies for 32-bit Linux
+#
+# Build: ./scripts/build-base.sh --push
+# Rebuild: Monthly or when system dependencies change
+
+FROM docker.io/i386/debian:buster
+
+# Fix EOL repositories (Debian Buster moved to archive)
+RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i '/buster-updates/d' /etc/apt/sources.list
+
+# All build + runtime dependencies in one layer
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    # Build tools
+    build-essential nasm make pkg-config \
+    # Python 2.7 (required by TGE)
+    python2.7 python2.7-dev python-pip \
+    # Development libraries for TGE compilation
+    libsdl1.2-dev libgl1-mesa-dev libglu1-mesa-dev \
+    libfreetype6-dev libpng-dev libxft-dev \
+    libogg-dev libvorbis-dev libtheora-dev \
+    # Runtime libraries
+    libsdl1.2debian libgl1-mesa-glx libglu1-mesa \
+    libfreetype6 libogg0 libvorbis0a libtheora0 libxft2 \
+    # Utilities
+    procps net-tools && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set up Python symlinks
+RUN ln -sf /usr/bin/python2.7 /usr/bin/python2 && \
+    ln -sf /usr/bin/python2.7 /usr/bin/python
+
+# Install Python dependencies for MoM server
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install setuptools wheel && \
+    pip install 'Twisted==10.1.0' 'zope.interface>=4.0,<5' \
+    'pyasn1==0.4.8' 'pycrypto==2.6.1' 'sqlobject'
+
+WORKDIR /build

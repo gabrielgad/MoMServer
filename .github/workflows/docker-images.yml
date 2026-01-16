@@ -1,0 +1,162 @@
+name: Build Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Image to build'
+        required: true
+        default: 'app'
+        type: choice
+        options:
+          - base-deps
+          - tge-builder
+          - app
+          - all
+      tge_version:
+        description: 'TGE builder version tag (for tge-builder builds)'
+        required: false
+        default: 'v1.0'
+      app_tag:
+        description: 'App image tag'
+        required: false
+        default: 'latest'
+
+  push:
+    branches: [master, main]
+    paths:
+      - 'mud/**'
+      - 'mud_ext/**'
+      - 'common/**'
+      - 'projects/**'
+      - 'serverconfig/**'
+      - '*.py'
+      - 'main.cs'
+      - 'docker-entrypoint.sh'
+      - 'Dockerfile.app'
+
+env:
+  REGISTRY: 10.0.0.6:5000
+  BUILDAH_FORMAT: docker
+
+jobs:
+  build-base-deps:
+    if: github.event_name == 'workflow_dispatch' && (inputs.image == 'base-deps' || inputs.image == 'all')
+    runs-on: [self-hosted, Linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Registry
+        run: |
+          podman login ${{ env.REGISTRY }} \
+            -u ${{ secrets.REGISTRY_USER }} \
+            -p ${{ secrets.REGISTRY_PASS }} \
+            --tls-verify=false
+
+      - name: Build base-deps image
+        run: |
+          podman build --layers --tls-verify=false \
+            -f Dockerfile.base-deps \
+            -t ${{ env.REGISTRY }}/momserver/base-deps:buster-i386 \
+            .
+
+      - name: Push base-deps image
+        run: |
+          podman push ${{ env.REGISTRY }}/momserver/base-deps:buster-i386 --tls-verify=false
+
+  build-tge-builder:
+    if: github.event_name == 'workflow_dispatch' && (inputs.image == 'tge-builder' || inputs.image == 'all')
+    needs: [build-base-deps]
+    # Run even if base-deps was skipped (already exists)
+    if: always() && (github.event_name == 'workflow_dispatch' && (inputs.image == 'tge-builder' || inputs.image == 'all'))
+    runs-on: [self-hosted, Linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Registry
+        run: |
+          podman login ${{ env.REGISTRY }} \
+            -u ${{ secrets.REGISTRY_USER }} \
+            -p ${{ secrets.REGISTRY_PASS }} \
+            --tls-verify=false
+
+      - name: Setup tmpfs build directory
+        run: |
+          TMPFS="/dev/shm/tge-build-${{ github.run_id }}"
+          rm -rf "$TMPFS" && mkdir -p "$TMPFS/tge-152-fork"
+          cp -r tge-152-fork/{engine,lib,mk,Makefile} "$TMPFS/tge-152-fork/"
+          cp Dockerfile.tge-builder "$TMPFS/"
+          echo "TMPFS=$TMPFS" >> $GITHUB_ENV
+
+      - name: Build tge-builder image
+        run: |
+          TGE_VERSION="${{ inputs.tge_version || 'v1.0' }}"
+          podman build --layers --memory=8g --tls-verify=false \
+            --build-arg BASE_IMAGE=${{ env.REGISTRY }}/momserver/base-deps:buster-i386 \
+            -f Dockerfile.tge-builder \
+            -t ${{ env.REGISTRY }}/momserver/tge-builder:$TGE_VERSION \
+            "$TMPFS"
+
+      - name: Push tge-builder image
+        run: |
+          TGE_VERSION="${{ inputs.tge_version || 'v1.0' }}"
+          podman push ${{ env.REGISTRY }}/momserver/tge-builder:$TGE_VERSION --tls-verify=false
+
+      - name: Cleanup tmpfs
+        if: always()
+        run: rm -rf "$TMPFS"
+
+  build-app:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.image == 'app' || inputs.image == 'all'))
+    runs-on: [self-hosted, Linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Registry
+        run: |
+          podman login ${{ env.REGISTRY }} \
+            -u ${{ secrets.REGISTRY_USER }} \
+            -p ${{ secrets.REGISTRY_PASS }} \
+            --tls-verify=false
+
+      - name: Determine app tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "extra_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ inputs.app_tag || 'latest' }}" >> $GITHUB_OUTPUT
+            echo "extra_tag=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build app image
+        run: |
+          podman build --layers --tls-verify=false \
+            --build-arg TGE_IMAGE=${{ env.REGISTRY }}/momserver/tge-builder:v1.0 \
+            --ignorefile .dockerignore.app \
+            -f Dockerfile.app \
+            -t ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.tag }} \
+            .
+
+      - name: Tag with SHA (on push)
+        if: steps.tag.outputs.extra_tag != ''
+        run: |
+          podman tag \
+            ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.tag }} \
+            ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.extra_tag }}
+
+      - name: Push app image
+        run: |
+          podman push ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.tag }} --tls-verify=false
+          if [ -n "${{ steps.tag.outputs.extra_tag }}" ]; then
+            podman push ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.extra_tag }} --tls-verify=false
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.tag.outputs.extra_tag }}" ]; then
+            echo "- **SHA Tag**: ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.extra_tag }}" >> $GITHUB_STEP_SUMMARY
+          fi
