@@ -65,10 +65,9 @@ jobs:
           podman push ${{ env.REGISTRY }}/momserver/base-deps:buster-i386 --tls-verify=false
 
   build-tge-builder:
-    if: github.event_name == 'workflow_dispatch' && (inputs.image == 'tge-builder' || inputs.image == 'all')
     needs: [build-base-deps]
-    # Run even if base-deps was skipped (already exists)
-    if: always() && (github.event_name == 'workflow_dispatch' && (inputs.image == 'tge-builder' || inputs.image == 'all'))
+    # Run even if base-deps was skipped (already exists in registry)
+    if: always() && github.event_name == 'workflow_dispatch' && (inputs.image == 'tge-builder' || inputs.image == 'all')
     runs-on: [self-hosted, Linux]
     steps:
       - uses: actions/checkout@v4
