@@ -145,11 +145,16 @@ def Tick():
     
     #are we live?
     if SPAWNED:
+        print "Tick: SPAWNED=%s, ANNOUNCECALLBACK=%s, ZONECLUSTERS=%d/%d" % (
+            SPAWNED, ANNOUNCECALLBACK is not None, len(ZONECLUSTERS), len(CLUSTERNAMES))
         if not ANNOUNCECALLBACK and len(ZONECLUSTERS)==len(CLUSTERNAMES):
-            for z in ZONECLUSTERS:
+            all_live = True
+            for i, z in enumerate(ZONECLUSTERS):
                 if not z.live:
-                    break
-            else:
+                    print "  Zone cluster %d not live yet" % i
+                    all_live = False
+            if all_live:
+                print "All zone clusters live - starting announcements"
                 SPAWNED = False
                 AnnounceWorld()
     
@@ -288,28 +293,31 @@ def SpawnWorld():
         
         
 #announce stuff
-def AnnounceSuccess(result,perspective):
+def AnnounceSuccess(result, perspective):
+    print "Announce SUCCESS - world registered with MasterServer"
     perspective.broker.transport.loseConnection()
 
 def AnnounceConnected(perspective):
     #we'll always connect on zone cluster 0 first
     wname = WORLDNAME.replace("_"," ")
+    print "Connected to MasterServer, sending announcement for '%s' (port=%s, players=%d)" % (
+        wname, ZoneClusterAvatar.avatars[0].worldPort, ZoneClusterAvatar.numPlayers)
     perspective.callRemote("WorldAvatar","announceWorld",wname,ZoneClusterAvatar.avatars[0].worldPort,False,[],(ZoneClusterAvatar.numPlayers,1024)).addCallbacks(AnnounceSuccess,AnnounceFailure,(perspective,))
-    
+
 def AnnounceFailure(error):
-    print "ANNOUNCE FAILURE!!!!!",error
+    print "ANNOUNCE FAILURE: %s" % error
+    print "  MASTERIP=%s, MASTERPORT=%s, PUBLICNAME=%s" % (MASTERIP, MASTERPORT, PUBLICNAME)
 
 def AnnounceWorld():
     global ANNOUNCECALLBACK
     ANNOUNCECALLBACK = reactor.callLater(60,AnnounceWorld)
-    
+
     username = "%s-World"%PUBLICNAME
     password = PASSWORD
     password = md5(password).digest()
 
+    print "Announcing World to %s:%s (user=%s)" % (MASTERIP, MASTERPORT, username)
 
-    print "Announcing World"
-    
     factory = pb.PBClientFactory()
     reactor.connectTCP(MASTERIP,MASTERPORT,factory)
     #the pb.Root() is a bit of a hack, I don't know how to get host address on server without
@@ -345,7 +353,10 @@ def LoadZoneClusterNames():
             for x in range(0,10):
                 if not zones.has_key(x):
                     break
-                CLUSTERNAMES.append(zones[x])
+                # DEBUG: Limit to first zone only for testing
+                CLUSTERNAMES.append(zones[x][:1])  # Only first zone in cluster
+                print "### LoadZoneClusterNames: Added cluster %d with zones: %s" % (x, zones[x][:1])
+                break  # Only one cluster for testing
             
             cursor.close()
             conn.close()

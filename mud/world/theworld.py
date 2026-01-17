@@ -679,10 +679,15 @@ class World(Persistent):
             zoneName = znames[0]
         else:
             #let's see if we launched this zone
+            print "### spawnDedicatedZone: looking for port=%s (type=%s)" % (simPort, type(simPort))
+            print "### spawnDedicatedZone: waitingZoneInstances count=%d" % len(self.waitingZoneInstances)
             for zi in self.waitingZoneInstances:
+                print "### spawnDedicatedZone: checking zi.port=%s (type=%s)" % (zi.port, type(zi.port))
                 if zi.port == simPort:
+                    print "### spawnDedicatedZone: FOUND match!"
                     return zi
-            
+            print "### spawnDedicatedZone: NO MATCH FOUND"
+
         #this is a dedicated server that has been launched remotely, 
         #shouldn't happen for right now... so we'll assert
         traceback.print_stack()

@@ -203,10 +203,8 @@ try:
     if CoreSettings.PGSERVER:
         print "Copying fresh baseline"
         d = "./%s/data/worlds/multiplayer/%s/cluster%i"%(GAMEROOT,WORLDNAME,CLUSTER)
-        try:
+        if os.path.exists(d):
             rmtree(d)
-        except:
-            pass
         os.makedirs(d)
         DATABASE = d+"/world.db"
         copyfile("./%s/data/worlds/multiplayer.baseline/world.db"%GAMEROOT,DATABASE)
@@ -300,9 +298,10 @@ try:
         global ZONECOUNT
         if ZONECOUNT == -1: #hack!
             return
-        print zinst.name, "is live"
+        print "### LiveZoneCallback: %s, ZONECOUNT=%d/%d" % (zinst.name, ZONECOUNT+1, len(STATICZONES))
         ZONECOUNT+=1
         if ZONECOUNT == len(STATICZONES):
+            print "### LiveZoneCallback: All zones live! Calling ConnectToDaemon..."
             ZONECOUNT = -1
             if not CoreSettings.PGSERVER:
                 THESERVER.allowConnections = True
@@ -311,6 +310,14 @@ try:
             else:
                 ConnectToDaemon()
 
+    def debug_zone_status():
+        print "### STATUS: waiting=%d live=%d target=%d ZONECOUNT=%d" % (
+            len(THEWORLD.waitingZoneInstances),
+            len(THEWORLD.liveZoneInstances),
+            len(STATICZONES),
+            ZONECOUNT)
+        reactor.callLater(30, debug_zone_status)
+    reactor.callLater(60, debug_zone_status)
 
 
 
@@ -321,7 +328,7 @@ try:
         time = 0
         for x in xrange(0,len(STATICZONES)):
             reactor.callLater(time,SpawnZone,STATICZONES[x])
-            time+=5
+            time+=15  # Increased from 5 to reduce memory pressure
 
 
     def AnnounceSuccess(result,perspective):
@@ -637,7 +644,7 @@ try:
         print "Daemon Connection Error",error
 
     def ConnectToDaemon():
-        print "Connecting to World Deamon at: %s"%DAEMONIP
+        print "### ConnectToDaemon CALLED - connecting to %s:7000" % DAEMONIP
         world = World.byName("TheWorld")
 
         factory = pb.PBClientFactory()

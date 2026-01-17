@@ -1,0 +1,16 @@
+// MoM Server Main Entry Point
+// Based on starter.mmo/main.cs
+
+// Load up common script base (defines initBaseServer, etc.)
+loadDir("common");
+
+// Set WorldPort for dedicated server
+$Py::WorldPort = "28000";
+$Py::TestVar = "SCRIPT_EXECUTED";
+
+// Load server init
+exec("./server/init.cs");
+
+// Start server
+initServer();
+initDedicated();

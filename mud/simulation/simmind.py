@@ -21,6 +21,10 @@ from mud.world.shared.vocals import *
 
 # jelly
 import mud.world.shared.worlddata
+# Debug: verify ZoneConnectionInfo is registered
+from twisted.spread import jelly
+print "DEBUG: ZoneConnectionInfo in unjellyableRegistry:", 'ZoneConnectionInfo' in str(jelly.unjellyableRegistry)
+print "DEBUG: unjellyableRegistry keys:", [k for k in jelly.unjellyableRegistry.keys() if 'Zone' in str(k)]
 
 import os,sys
 from traceback import print_exc
@@ -614,12 +618,12 @@ class SimMind(pb.Root):
         transform,spawnInfos,mobInfos,avatarIndex,role = results
         transform[6] = radians(transform[6])
         t = ' '.join(str(val) for val in transform)
-        
+
         conn = TGEObject(connection)
-        
+
         #we need to set spawninfo(s) here for characters!!!
         dblocks = [CreatePlayerDatablock(sp,True) for sp in spawnInfos]
-        
+
         #playerid  = int(conn.onClientEnterGameReal(t,"TempDummyPlayerData"))
         playerid  = int(conn.onClientEnterGameReal(t,dblocks[avatarIndex].getName()))
         player = TGEObject(playerid)
@@ -1768,12 +1772,17 @@ def PyOnProjectileDeleted(args):
 
 def PyOnGameConnectionConnect(args):
     connId = int(args[1])
-    SIMMIND.onGameConnectionConnect(connId)
+    if SIMMIND:
+        SIMMIND.onGameConnectionConnect(connId)
+    else:
+        # Zone not fully initialized yet - disconnect the client
+        TGEEval('%d.delete();' % connId)
 
 
 def PyOnGameConnectionDrop(args):
     connId = int(args[1])
-    SIMMIND.onGameConnectionDrop(connId)
+    if SIMMIND:
+        SIMMIND.onGameConnectionDrop(connId)
 
 
 def PyOnEndSequence(args):
@@ -1850,11 +1859,26 @@ def PyZoneTrigger(args):
 
 def StartSimulation():
     #the server is up, start simulation connection to world
-    if int(TGEGetGlobal("$Server::Dedicated")):
-        SIMMIND.perspective.callRemote("SimAvatar","startSimulation",SIMMIND,SIMMIND.zoneInstanceName,os.getpid())
-    else:
-        from mud.client.playermind import PLAYERMIND
-        SIMMIND.perspective.callRemote("SimAvatar","startSimulation",PLAYERMIND.simMind,PLAYERMIND.simMind.zoneInstanceName)
+    print "### StartSimulation() called for zone:", SIMMIND.zoneInstanceName
+    # File-based logging for debugging (bypasses TGE stdout redirect)
+    try:
+        with open("/server/logs/zone_debug.log", "a") as f:
+            f.write("### StartSimulation called for %s, pid=%d\n" % (SIMMIND.zoneInstanceName, os.getpid()))
+    except:
+        pass  # Ignore if log dir doesn't exist
+    try:
+        if int(TGEGetGlobal("$Server::Dedicated")):
+            print "### Calling startSimulation on WorldServer, pid:", os.getpid()
+            d = SIMMIND.perspective.callRemote("SimAvatar","startSimulation",SIMMIND,SIMMIND.zoneInstanceName,os.getpid())
+            d.addCallback(lambda r: sys.stdout.write("### startSimulation SUCCESS\n"))
+            d.addErrback(lambda e: sys.stdout.write("### startSimulation FAILED: %s\n" % e))
+        else:
+            from mud.client.playermind import PLAYERMIND
+            SIMMIND.perspective.callRemote("SimAvatar","startSimulation",PLAYERMIND.simMind,PLAYERMIND.simMind.zoneInstanceName)
+    except Exception as e:
+        print "### StartSimulation() EXCEPTION:", e
+        import traceback
+        traceback.print_exc()
 
 
 
@@ -1875,16 +1899,66 @@ def SetRaceGraphics(graphics):
     global RACEGRAPHICS
     RACEGRAPHICS = graphics
 
+# Flag to indicate StartSimulation should be called from main loop
+PENDING_START_SIMULATION = False
+
+def CheckPendingStartSimulation():
+    """Called from main loop to check if StartSimulation should be run."""
+    global PENDING_START_SIMULATION
+    if PENDING_START_SIMULATION:
+        PENDING_START_SIMULATION = False
+        print "### CheckPendingStartSimulation: Triggering StartSimulation from main loop"
+        StartSimulation()
+
 def GotZoneConnect(zconnect):
-    global RACEGRAPHICS 
-    
+    global RACEGRAPHICS, PENDING_START_SIMULATION
+
+    # Debug: print object type and attributes
+    print "### GotZoneConnect: zconnect type:", type(zconnect)
+    print "### GotZoneConnect: zconnect.__class__:", zconnect.__class__
+    print "### GotZoneConnect: zconnect.__dict__:", getattr(zconnect, '__dict__', 'NO_DICT')
+
+    # Handle Unpersistable case
+    if hasattr(zconnect, 'unjellyableRegistry'):
+        print "### GotZoneConnect: zconnect has unjellyableRegistry, trying to access data"
+
     print "Launching: ", zconnect.niceName
     RACEGRAPHICS = zconnect.raceGraphics
     SIMMIND.zoneInstanceName = zconnect.instanceName
+
+    # Set the server port before createServer - prefs.cs may have overwritten it
+    TGESetGlobal("$Pref::Server::Port", str(zconnect.port))
+
+    # Try to directly init network port before createServer
+    initCode = 'setNetPort(%d); allowConnections(true);' % zconnect.port
+    TGEEval(initCode)
+
     eval = """
     createServer("Multiplayer", "%s/data/missions/%s");
     """%(GAMEROOT,zconnect.missionFile)
+    print "### GotZoneConnect: About to call TGEEval(createServer)"
+    # File-based logging to bypass TGE stdout issues
+    try:
+        with open("/server/logs/zone_debug.log", "a") as f:
+            f.write("### GotZoneConnect: About to TGEEval(createServer) for %s\n" % zconnect.niceName)
+    except:
+        pass
     TGEEval(eval)
+    print "### GotZoneConnect: TGEEval(createServer) returned"
+    try:
+        with open("/server/logs/zone_debug.log", "a") as f:
+            f.write("### GotZoneConnect: TGEEval returned, setting PENDING flag\n")
+    except:
+        pass
+    # Mark that StartSimulation should be called from main loop
+    # (reactor.callLater doesn't work during TGE initialization)
+    print "### GotZoneConnect: Setting PENDING_START_SIMULATION flag"
+    PENDING_START_SIMULATION = True
+    try:
+        with open("/server/logs/zone_debug.log", "a") as f:
+            f.write("### GotZoneConnect: PENDING_START_SIMULATION set to True\n")
+    except:
+        pass
 
 
 def DedicatedDisconnected(args):
@@ -1893,14 +1967,15 @@ def DedicatedDisconnected(args):
 
 def WorldConnected(perspective):
     perspective.notifyOnDisconnect(DedicatedDisconnected)
-    
+
     #we should also be able to send a specific zone here... though for now it'll be easier if world picks
     #for this we send "any"
     SIMMIND.perspective = perspective
     #$pref::Net::Port <- client
     #$Pref::Server::Port <- server
     serverPort = int(TGEGetGlobal("$Pref::Server::Port"))
-    perspective.callRemote("SimAvatar","spawnDedicatedZone",TGEGetGlobal("$zoneArg"),serverPort).addCallbacks(GotZoneConnect,Failure)
+    zoneArg = TGEGetGlobal("$zoneArg")
+    perspective.callRemote("SimAvatar","spawnDedicatedZone",zoneArg,serverPort).addCallbacks(GotZoneConnect,Failure)
 
 
 def GotWorldInfos(winfos,perspective):
@@ -1942,6 +2017,13 @@ def MasterConnected(perspective):
 
 def WorldSimulationLogin():
 #dedicated
+    # File-based logging for debugging (bypasses TGE stdout redirect)
+    try:
+        with open("/server/logs/zone_debug.log", "a") as f:
+            f.write("### WorldSimulationLogin() called, pid=%d\n" % os.getpid())
+    except:
+        pass  # Ignore if log dir doesn't exist
+    TGEPrint("### WorldSimulationLogin() - START\n")
     #redirect stdout
     sys.oldstdout = sys.stdout
     sys.oldstderr = sys.stderr
@@ -1953,14 +2035,18 @@ def WorldSimulationLogin():
             #wx.LogMessage(text) #strip \n
             #sys.oldstdout.write(text)
             #sys.oldstdout.flush()
+        def flush(self):
+            pass  # TGEPrint handles output immediately, no buffering needed
         def __del__(self):
             sys.stdout = sys.oldstdout
             sys.stderr = sys.oldstderr
     sys.stdout = mywriter()
     sys.stderr = mywriter()
-    
+    TGEPrint("### WorldSimulationLogin() - stdout/stderr redirected\n")
+
     TGESetGlobal("$Py::ISSINGLEPLAYER",0)
-    
+    TGEPrint("### WorldSimulationLogin() - ISSINGLEPLAYER set\n")
+
     #masterIP = TGEGetGlobal("$Py::MasterIP")
     #masterPort = int(TGEGetGlobal("$Py::MasterPort"))
     #print masterIP, masterPort
@@ -1968,14 +2054,30 @@ def WorldSimulationLogin():
     #reactor.connectTCP(masterIP,masterPort,factory)
     #factory.login(UsernamePassword("EnumWorlds-EnumWorlds","EnumWorlds"),None).addCallbacks(MasterConnected, Failure)
     val = TGEGetGlobal("$Py::WorldPort")
+    TGEPrint("### WorldSimulationLogin() - WorldPort = %s\n" % repr(val))
+    # File-based logging for WorldPort check
+    try:
+        with open("/server/logs/zone_debug.log", "a") as f:
+            f.write("### WorldSimulationLogin: WorldPort=%s\n" % repr(val))
+    except:
+        pass
     if val:
+        TGEPrint("### WorldSimulationLogin() - connecting to world server\n")
         worldport = int(val)
         factory = pb.PBClientFactory()
         reactor.connectTCP("127.0.0.1",worldport,factory)
         mind = SimMind()
         password = md5("ZoneServer").digest()
-        
+
         factory.login(UsernamePassword("ZoneServer-ZoneServer",password),mind).addCallbacks(WorldConnected, Failure)
+    else:
+        TGEPrint("### WorldSimulationLogin() - WARNING: No WorldPort set, cannot connect!\n")
+        try:
+            with open("/server/logs/zone_debug.log", "a") as f:
+                f.write("### WorldSimulationLogin: WARNING - No WorldPort, cannot connect to WorldServer!\n")
+        except:
+            pass
+    TGEPrint("### WorldSimulationLogin() - END\n")
 
 
 

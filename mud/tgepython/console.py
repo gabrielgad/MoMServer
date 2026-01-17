@@ -69,7 +69,7 @@ class TGEManager:
                 simo=None#TGEObject(selfid)
         
                 
-        if not self.functionBindings[namespace].has_key(functionname):
+        if namespace not in self.functionBindings or not self.functionBindings[namespace].has_key(functionname):
             raise TypeError,("TGECall: Function doesn't exist",namespace,functionname)
             return None
         try:

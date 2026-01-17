@@ -1,18 +1,21 @@
+# syntax=docker/dockerfile:1.4
 # MoM Reborn Server - 32-bit Build
 # Builds pytge.so in native 32-bit environment to avoid pointer truncation issues
 
 # =============================================================================
 # BUILD STAGE: Compile pytge.so
 # =============================================================================
-FROM i386/debian:buster AS builder
+FROM docker.io/i386/debian:buster AS builder
 
 # Switch to archive repositories (Buster is EOL)
 RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
     sed -i 's|security.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
     sed -i '/buster-updates/d' /etc/apt/sources.list
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
+# Install build dependencies (with BuildKit cache)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
     build-essential \
     nasm \
     make \
@@ -22,11 +25,11 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-dev \
     libglu1-mesa-dev \
     libfreetype6-dev \
+    libpng-dev \
     libogg-dev \
     libvorbis-dev \
     libtheora-dev \
-    libxft-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libxft-dev
 
 WORKDIR /build
 
@@ -45,9 +48,26 @@ RUN make -f mk/configure.mk OS=LINUX COMPILER=GCC4 BUILD=RELEASE
 WORKDIR /build/tge-152-fork
 RUN rm -rf lib/out.GCC4.RELEASE engine/out.GCC4.RELEASE
 
-# Build libs first (creates lib/out.GCC4.RELEASE)
+# Use system libpng16 instead of bundled libpng 1.2
+# This prevents version mismatch between TGE and libpng16 pulled in by freetype at runtime
 WORKDIR /build/tge-152-fork/lib
-RUN make 2>&1 | tail -30
+
+# Skip building bundled lpng - we'll use system libpng instead
+# Modify Makefile to skip lpng
+RUN sed -i 's/\$(DIR.OBJ)\/lpng\$(EXT.LIB)//' Makefile
+
+# Create empty lpng.a to satisfy linker (engine expects it but we'll override with -lpng)
+RUN mkdir -p out.GCC4.RELEASE && \
+    ar rcs out.GCC4.RELEASE/lpng.a
+
+# Ensure engine uses system libpng headers
+RUN rm -rf lpng/*.h && \
+    ln -s /usr/include/png.h lpng/png.h && \
+    ln -s /usr/include/pngconf.h lpng/pngconf.h && \
+    ln -s /usr/include/pnglibconf.h lpng/pnglibconf.h
+
+# Build libs first (creates lib/out.GCC4.RELEASE) - parallel build
+RUN make -j$(nproc) 2>&1 | tail -30
 
 # Build pytge.so - create output directory structure
 WORKDIR /build/tge-152-fork/engine
@@ -56,22 +76,24 @@ RUN mkdir -p out.GCC4.RELEASE && \
     find . -maxdepth 3 -type d ! -path "./out*" ! -path "./.git*" -print0 | \
     xargs -0 -I {} mkdir -p "out.GCC4.RELEASE/{}" 2>/dev/null || true && \
     ls out.GCC4.RELEASE/ | head -20
-RUN make pytge 2>&1 | tail -100 && \
+RUN make -j$(nproc) pytge 2>&1 | tail -100 && \
     ls -la out.GCC4.RELEASE/pytge.so && \
     file out.GCC4.RELEASE/pytge.so
 
 # =============================================================================
 # RUNTIME STAGE: Python 2.7 + MoMServer
 # =============================================================================
-FROM i386/debian:buster
+FROM docker.io/i386/debian:buster
 
 # Switch to archive repositories (Buster is EOL)
 RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
     sed -i 's|security.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
     sed -i '/buster-updates/d' /etc/apt/sources.list
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+# Install runtime dependencies (with BuildKit cache)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
     python2.7 \
     python-pip \
     libsdl1.2debian \
@@ -83,8 +105,7 @@ RUN apt-get update && apt-get install -y \
     libtheora0 \
     libxft2 \
     procps \
-    net-tools \
-    && rm -rf /var/lib/apt/lists/*
+    net-tools
 
 # Create python2 symlink
 RUN ln -sf /usr/bin/python2.7 /usr/bin/python2 && \
@@ -92,9 +113,9 @@ RUN ln -sf /usr/bin/python2.7 /usr/bin/python2 && \
 
 WORKDIR /server
 
-# Install Python dependencies
-# Note: pycrypto 2.3 has issues, use 2.6.1 which compiles on Debian Buster
-RUN pip install --no-cache-dir \
+# Install Python dependencies (with BuildKit cache for pip)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
     'Twisted==10.1.0' \
     'zope.interface>=4.0,<5' \
     'pyasn1==0.4.8' \

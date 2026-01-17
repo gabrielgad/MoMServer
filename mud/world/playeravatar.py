@@ -95,13 +95,7 @@ class PlayerAvatar(Avatar):
         
     
     def gotCheckCharacterNameError(self,result):
-        import traceback
-        print "#### ERROR in checkCharacterName:", result
-        with open('/tmp/character_error.log', 'a') as f:
-            f.write("=== checkCharacterName error ===\n")
-            f.write(str(result) + "\n")
-            if hasattr(result, 'getTraceback'):
-                f.write(result.getTraceback() + "\n")
+        print "Error in checkCharacterName:", result
         return (-1,"There was an error creating this character: %s" % str(result))
         
     def perspective_newCharacter(self,newchar):

@@ -5,9 +5,9 @@ import os,sys,imp
 from ConfigParser import SafeConfigParser
 
 #Game Defaults...Change these only if you are instructed to via the instructions
-GAMENAME = "Testgame MMO"
-GAMEROOT = "testgame.mmo"
-DEFAULT_GAME_CONFIG = "testgame"
+GAMENAME = "Minions of Mirth"
+GAMEROOT = "minions.of.mirth"
+DEFAULT_GAME_CONFIG = "minions"
 
 MASTERIP = '127.0.0.1'
 MASTERPORT = 2007
@@ -29,7 +29,7 @@ GL_ANNOUNCE_IP = "www.somenet.com"
 
 USE_PNG_SVN = 1
 
-DEFAULT_GAMENAME = "Testgame"
+DEFAULT_GAMENAME = "Minions of Mirth"
 DEFAULT_GAMEROOT = GAMEROOT
 DEFAULT_MASTERIP = MASTERIP
 DEFAULT_MASTERPORT = MASTERPORT

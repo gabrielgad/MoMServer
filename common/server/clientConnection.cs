@@ -23,12 +23,31 @@ function GameConnection::onConnectRequest( %client, %netAddress, %name )
 //
 function GameConnection::onConnect( %client, %name )
 {
+   // File-based debug logging
+   %f = new FileObject();
+   %f.openForAppend("/tmp/torquescript_debug.log");
+   %f.writeLine("onConnect called: client=" @ %client @ " name=" @ %name);
+   %f.close();
+   %f.delete();
+
    // Send down the connection error info, the client is
    // responsible for displaying this message if a connection
    // error occures.
    messageClient(%client,'MsgConnectionError',"",$Pref::Server::ConnectionError);
-   
+
+   %f = new FileObject();
+   %f.openForAppend("/tmp/torquescript_debug.log");
+   %f.writeLine("Calling Py::OnGameConnectionConnect");
+   %f.close();
+   %f.delete();
+
    Py::OnGameConnectionConnect(%client);
+
+   %f = new FileObject();
+   %f.openForAppend("/tmp/torquescript_debug.log");
+   %f.writeLine("Py::OnGameConnectionConnect returned");
+   %f.close();
+   %f.delete();
 
    // Send mission information to the client
    sendLoadInfoToClient( %client );

@@ -13,9 +13,11 @@ $MissionLoadPause = 5000;
 
 //-----------------------------------------------------------------------------
 
-function loadMission( %missionName, %isFirstMission ) 
+function loadMission( %missionName, %isFirstMission )
 {
+   echo("### loadMission() - START - mission: " @ %missionName);
    endMission();
+   echo("### loadMission() - after endMission()");
    echo("*** LOADING MISSION: " @ %missionName);
    echo("*** Stage 1 load");
 
@@ -43,34 +45,41 @@ function loadMission( %missionName, %isFirstMission )
 
    // if this isn't the first mission, allow some time for the server
    // to transmit information to the clients:
+   echo("### loadMission() - about to call loadMissionStage2");
    if( %isFirstMission || $Server::ServerType $= "SinglePlayer" )
       loadMissionStage2();
    else
       schedule( $MissionLoadPause, ServerGroup, loadMissionStage2 );
+   echo("### loadMission() - END");
 }
 
 //-----------------------------------------------------------------------------
 
-function loadMissionStage2() 
+function loadMissionStage2()
 {
+   echo("### loadMissionStage2() - START");
    // Create the mission group off the ServerGroup
    echo("*** Stage 2 load");
    $instantGroup = ServerGroup;
 
    // Make sure the mission exists
    %file = $Server::MissionFile;
-   
+   echo("### loadMissionStage2() - mission file: " @ %file);
+
    if( !isFile( %file ) ) {
       error( "Could not find mission " @ %file );
       return;
    }
+   echo("### loadMissionStage2() - file exists, calculating CRC");
 
    // Calculate the mission CRC.  The CRC is used by the clients
    // to caching mission lighting.
    $missionCRC = getFileCRC( %file );
+   echo("### loadMissionStage2() - CRC: " @ $missionCRC @ ", about to exec mission file");
 
    // Exec the mission, objects are added to the ServerGroup
    exec(%file);
+   echo("### loadMissionStage2() - mission file exec completed");
    
    // If there was a problem with the load, let's try another mission
    if( !isObject(MissionGroup) ) {
@@ -88,18 +97,23 @@ function loadMissionStage2()
 
    // Mission loading done...
    echo("*** Mission loaded");
-   
+   echo("### loadMissionStage2() - about to call StartServerReplication");
+
    //Replicate shapes on server
    StartServerReplication();
-   
+   echo("### loadMissionStage2() - StartServerReplication done");
+
    // Start all the clients in the mission
    $missionRunning = true;
    for( %clientIndex = 0; %clientIndex < ClientGroup.getCount(); %clientIndex++ )
       ClientGroup.getObject(%clientIndex).loadMission();
 
    // Go ahead and launch the game
+   echo("### loadMissionStage2() - about to call onMissionLoaded");
    onMissionLoaded();
+   echo("### loadMissionStage2() - onMissionLoaded done, calling purgeResources");
    purgeResources();
+   echo("### loadMissionStage2() - END");
 }
 
 

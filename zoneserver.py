@@ -173,15 +173,21 @@ try:
     
     from mud.gamesettings import *
     from mud.world.core import CoreSettings
-    
+
+    print "### ZONESERVER: Starting, args:", sys.argv
+    sys.stdout.flush()
+
     sys.argv.append("-game")
     sys.argv.append(GAMEROOT)
-    
+
     pytorque.Init(len(sys.argv),sys.argv)
-    
+
+    print "### ZONESERVER: pytorque.Init() complete"
+    sys.stdout.flush()
+
     if USE_WX:
         reactor.registerWxApp(app)
-    
+
     DYNAMIC = '-dynamic' in sys.argv
     
     CLUSTER = 0
@@ -191,7 +197,15 @@ try:
             SetupProcessors(CLUSTER)
     
     
-    from mud.simulation.simmind import NumPlayersInZone
+    try:
+        from mud.simulation.simmind import NumPlayersInZone, CheckPendingStartSimulation
+        # NOTE: WorldSimulationLogin is called from TorqueScript init.cs, not from Python
+        # to avoid duplicate calls. The TorqueScript version runs during pytorque.Init().
+    except Exception as e:
+        import traceback
+        print "Error setting up zone simulation:", e
+        traceback.print_exc()
+        CheckPendingStartSimulation = lambda: None  # Fallback if import fails
     from mud.world.core import CoreSettings
     from tgenative import TGEGetGlobal,TGESetGlobal
     
@@ -203,6 +217,10 @@ try:
     
     
     while pytorque.Tick() and RUNNING:
+        # Process Twisted reactor events
+        reactor.iterate(0)
+        # Check if StartSimulation needs to be called (after server init completes)
+        CheckPendingStartSimulation()
         num = NumPlayersInZone()
         if False:
             if not num:

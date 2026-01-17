@@ -341,13 +341,7 @@ class CharacterServerAvatar(pb.Referenceable):
             try:
                 p = self.createPlayer(publicName,code)
             except Exception as e:
-                import sys
                 traceback.print_exc()
-                # Also log to file for debugging
-                with open('/tmp/createplayer_error.log', 'a') as f:
-                    f.write("=== Error creating player %s ===\n" % publicName)
-                    traceback.print_exc(file=f)
-                    f.write("\n")
                 return (False,"Error creating new player: %s" % str(e))
         
         p.premium = premium

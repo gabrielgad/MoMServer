@@ -12,3 +12,9 @@ log_*
 
 venv
 .idea
+
+# Prevent committing native 64-bit builds
+pytge.so
+tge-152-fork/example/pytge.so
+tge-152-fork/engine/out.GCC4.RELEASE/
+tge-152-fork/lib/out.GCC4.RELEASE/

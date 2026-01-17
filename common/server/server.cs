@@ -8,11 +8,13 @@
 
 function portInit(%port)
 {
+   echo("#### portInit called with port: " @ %port);
    %failCount = 0;
    while(%failCount < 10 && !setNetPort(%port)) {
-      echo("Port init failed on port " @ %port @ " trying next port.");
+      echo("#### Port init failed on port " @ %port @ " trying next port.");
       %port++; %failCount++;
    }
+   echo("#### portInit completed, final port: " @ %port);
 }
  
 function createServer(%serverType, %mission)
@@ -32,11 +34,12 @@ function createServer(%serverType, %mission)
    // Setup for multi-player, the network must have been
    // initialized before now.
    if (%serverType $= "MultiPlayer") {
-      echo("Starting multiplayer mode");
+      echo("#### Starting multiplayer mode on port: " @ $Pref::Server::Port);
 
       // Make sure the network port is set to the correct pref.
       portInit($Pref::Server::Port);
       allowConnections(true);
+      echo("#### allowConnections(true) called");
 
       //if ($pref::Net::DisplayOnMaster !$= "Never" )
       //   schedule(0,0,startHeartbeat);

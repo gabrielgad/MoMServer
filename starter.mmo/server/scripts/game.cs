@@ -76,9 +76,11 @@ function onServerDestroyed()
 
 function onMissionLoaded()
 {
+   echo("### onMissionLoaded() - START");
    // Called by loadMission() once the mission is finished loading.
    // Nothing special for now, just start up the game play.
    startGame();
+   echo("### onMissionLoaded() - END");
 }
 
 function onMissionEnded()
@@ -99,11 +101,13 @@ function onMissionEnded()
 
 function startGame()
 {
+   echo("### startGame() - START");
    if ($Game::Running) {
       error("startGame: End the game first!");
       return;
    }
 
+   echo("### startGame() - informing clients");
    // Inform the client we're starting up
    for( %clientIndex = 0; %clientIndex < ClientGroup.getCount(); %clientIndex++ ) {
       %cl = ClientGroup.getObject( %clientIndex );
@@ -117,15 +121,18 @@ function startGame()
    if ($Game::Duration)
       $Game::Schedule = schedule($Game::Duration * 1000, 0, "onGameDurationEnd" );
    $Game::Running = true;
-   
+
+   echo("### startGame() - starting AIManager");
    // Start the AIManager
    new ScriptObject(AIManager) {};
    MissionCleanup.add(AIManager);
    AIManager.think();
-   
+
    //alright the simulation server is up
    //it's time to log into ZoneAvatar
+   echo("### startGame() - about to call Py::StartSimulation()");
    Py::StartSimulation();
+   echo("### startGame() - END");
 }
 
 function endGame()

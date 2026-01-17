@@ -9,24 +9,19 @@ services:
       context: .
       dockerfile: Dockerfile.32bit
     container_name: mom-server
-    ports:
-      - "2002:2002"     # MasterServer
-      - "2003:2003"     # GMServer
-      - "7000:7000"     # WorldDaemon
-      - "7001:7001"     # WorldDaemon
-      - "28000:28000"   # WorldServer (primary zone)
-      - "8192:8192"     # Manhole (admin)
+    # Use host networking for UDP game traffic
+    network_mode: host
     volumes:
       - ./data:/server/data
       - ./logs:/server/logs
       - ./projects:/server/projects
       - ./serverconfig:/server/serverconfig
-    networks:
-      - mom-network
+      - ./common:/server/common
+      - ./minions.of.mirth:/server/minions.of.mirth
+      - ./main.cs:/server/main.cs
+      - ./zoneserver.py:/server/zoneserver.py
+      - ./mud:/server/mud
+      - ./mud_ext:/server/mud_ext
     restart: unless-stopped
     # Override entrypoint for debugging if needed:
     # command: /bin/bash -c "sleep infinity"
-
-networks:
-  mom-network:
-    driver: bridge

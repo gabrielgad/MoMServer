@@ -1,7 +1,9 @@
 //-----------------------------------------------------------------------------
-// Torque Game Engine 
+// Torque Game Engine
 // Copyright (C) GarageGames.com, Inc.
 //-----------------------------------------------------------------------------
+
+echo("#### common/main.cs is being loaded");
 
 //-----------------------------------------------------------------------------
 // Load up defaults console values.
@@ -37,6 +39,15 @@ function initBaseClient()
 
 function initBaseServer()
 {
+   echo("#### initBaseServer() called");
+
+   // Debug: write to file to confirm this runs
+   %dbg = new FileObject();
+   %dbg.openForAppend("/tmp/initBaseServer_debug.log");
+   %dbg.writeLine("initBaseServer() is executing");
+   %dbg.close();
+   %dbg.delete();
+
    // Base server functionality
    exec("./server/audio.cs");
    exec("./server/server.cs");
