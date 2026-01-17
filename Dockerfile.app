@@ -5,7 +5,7 @@
 # Build: ./scripts/build-app.sh --push
 # Rebuild: On every code change (fast!)
 
-ARG TGE_IMAGE=10.0.0.6:5000/momserver/tge-builder:v1.1
+ARG TGE_IMAGE=10.0.0.6:5000/momserver/tge-builder:v1.2
 FROM ${TGE_IMAGE}
 
 WORKDIR /server

@@ -184,7 +184,7 @@ jobs:
       - name: Build app image
         run: |
           podman build --layers --tls-verify=false \
-            --build-arg TGE_IMAGE=${{ env.REGISTRY }}/momserver/tge-builder:v1.1 \
+            --build-arg TGE_IMAGE=${{ env.REGISTRY }}/momserver/tge-builder:v1.2 \
             --ignorefile .dockerignore.app \
             -f Dockerfile.app \
             -t ${{ env.REGISTRY }}/momserver/app:${{ steps.tag.outputs.tag }} \
