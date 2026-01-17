@@ -5,9 +5,7 @@ version: '3.8'
 
 services:
   momserver:
-    build:
-      context: .
-      dockerfile: Dockerfile.32bit
+    image: 10.0.0.6:5000/momserver/app:latest
     container_name: mom-server
     # Use host networking for UDP game traffic
     network_mode: host
