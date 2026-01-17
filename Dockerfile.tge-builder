@@ -42,6 +42,9 @@ RUN make -j$(nproc)
 # Build pytge.so Python extension
 WORKDIR /build/tge-152-fork/engine
 
+# Create symlink for mmokit-rpg include paths (code uses #include "rpg/...")
+RUN ln -s mmokit-rpg rpg
+
 # Create output directory structure (required by Makefile)
 # Also create ../example to prevent post-build copy failure
 RUN mkdir -p out.GCC4.RELEASE ../example && \
